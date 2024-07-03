@@ -166,7 +166,7 @@ def get_inboxes(driver):
 
 
 def get_newest_inbox(driver):
-    emails = driver.find_elements(By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr")
+    emails = get_inboxes(driver)
     if emails:
         sender_object = emails[0].find_element(By.CSS_SELECTOR, "span.zF")
         sender = sender_object.get_attribute("name")
