@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='Process email address.')
 parser.add_argument('--email', help='Email address for processing')
 args = parser.parse_args()
 
-IGNORE_EXCEPTIONS =(NoSuchElementException, StaleElementReferenceException)
+IGNORE_EXCEPTIONS = (NoSuchElementException, StaleElementReferenceException)
 EMAIL = args.email
 EMAIL_SUBJECT = 'Test Email Subject'
 EMAIL_BODY = 'Test Email Body'
@@ -60,11 +60,7 @@ def login(driver):
         email_input.send_keys(Keys.ENTER)
 
         # Wait for the password input field to be present
-
-        x = EC.presence_of_element_located((By.NAME, "Passwd"))
-        password_input = WebDriverWait(driver, 10).until(
-            x)
-
+        password_input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "Passwd")))
         password_input.send_keys(PASSWORD)
         password_input.send_keys(Keys.ENTER)
 
