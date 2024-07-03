@@ -1,5 +1,6 @@
 import re
 import os
+import arg
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -10,11 +11,16 @@ from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.action_chains import ActionChains
 from time import sleep
 
-IGNORE_EXCEPTIONS =(NoSuchElementException, StaleElementReferenceException)
 
-RECIPIENT_MAIL = 'panepojdtesihrat@gmail.com'
+parser = argparse.ArgumentParser(description='Process email address.')
+parser.add_argument('--email', help='Email address for processing')
+args = parser.parse_args()
+
+IGNORE_EXCEPTIONS =(NoSuchElementException, StaleElementReferenceException)
+RECIPIENT_MAIL = args.email
 EMAIL_SUBJECT = 'Test Email Subject'
 EMAIL_BODY = 'Test Email Body'
+EMAIL = args.email
 PASSWORD = os.getenv('PASSWORD_ENV_VAR')
 
 
