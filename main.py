@@ -17,10 +17,9 @@ parser.add_argument('--email', help='Email address for processing')
 args = parser.parse_args()
 
 IGNORE_EXCEPTIONS =(NoSuchElementException, StaleElementReferenceException)
-RECIPIENT_MAIL = args.email
+EMAIL = args.email
 EMAIL_SUBJECT = 'Test Email Subject'
 EMAIL_BODY = 'Test Email Body'
-EMAIL = args.email
 PASSWORD = os.getenv('PASSWORD_ENV_VAR')
 
 
@@ -57,7 +56,7 @@ def login(driver):
         email_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "identifierId"))
         )
-        email_input.send_keys('panepojdtesihrat@gmail.com')
+        email_input.send_keys(EMAIL)
         email_input.send_keys(Keys.ENTER)
 
         # Wait for the password input field to be present
@@ -92,7 +91,7 @@ def compose_and_send_email(driver):
             EC.presence_of_element_located((By.XPATH, "//input[@aria-label='To recipients']"))
         )
         sleep(1)
-        to_input.send_keys(RECIPIENT_MAIL)
+        to_input.send_keys(EMAIL)
 
         # Enter the subject
         subject_input = driver.find_element(By.NAME, "subjectbox")
