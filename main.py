@@ -25,7 +25,7 @@ PASSWORD = os.getenv('PASSWORD_ENV_VAR')
 
 
 # Decorator to retry interaction with driver before calling the function
-def renew_driver(func):
+def retry(func):
     @wraps(func)
     def wrapper(driver, *args, **kwargs):
         max_retries = 3
@@ -98,7 +98,7 @@ def login(driver):
         print("Step 1: Fail! Log in failed!")
         driver.quit()
 
-@renew_driver
+@retry
 def compose_email(driver):
     # Click on the Compose button
     compose_button = Button(driver, "//div[@role='button' and text()='Compose']")
@@ -126,7 +126,7 @@ def compose_email(driver):
     print("Step 2: Pass!  Mail composed")
 
 
-@renew_driver
+@retry
 def mark_email_as_label(driver):
     # click more options
     more_options = driver.find_element(By.XPATH, "//div[@data-tooltip='More options']")
@@ -142,7 +142,7 @@ def mark_email_as_label(driver):
     print("Step 3: Pass!  Social label selected")
 
 
-@renew_driver
+@retry
 def send_email(driver):
     # Click on the Send button
     send_button = Button(driver, "//div[@role='button' and text()='Send']")
@@ -150,7 +150,7 @@ def send_email(driver):
     print("Step 4: Pass! Mail sent")
 
 
-@renew_driver
+@retry
 def get_number_of_inbox(driver):
     inbox = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH, "//div[@data-tooltip='Inbox']"))
@@ -174,7 +174,7 @@ def verify_two_emails(old, new):
         raise ValueError("Mail from different sender arrived during test")
 
 
-@renew_driver
+@retry
 def verify_new_mail_came(driver, old_count, old_email):
     timeout = 30  # seconds
     interval = 1  # seconds
@@ -198,7 +198,7 @@ def get_inboxes(driver):
     return emails
 
 
-@renew_driver
+@retry
 def mark_first_email_as_starred(driver):
     emails = get_inboxes(driver)
     first_email = emails[0]
@@ -207,7 +207,7 @@ def mark_first_email_as_starred(driver):
     print("Step 6: Pass! First email marked as starred.")
 
 
-@renew_driver
+@retry
 def open_received_email(driver):
     emails = get_inboxes(driver)
 
@@ -228,7 +228,7 @@ def open_received_email(driver):
     print("Step 7: Pass! First email opened.")
 
 
-@renew_driver
+@retry
 def check_if_mail_is_social(driver):
     # click more options
     parent_div = WebDriverWait(driver, 10).until(
@@ -257,7 +257,7 @@ def check_if_mail_is_social(driver):
         print(f"Step 8 Fail! Social label value {aria_checked}")
 
 
-@renew_driver
+@retry
 def verify_subject_and_body(driver):
     email_body_parent = driver.find_element(By.XPATH, "//*[contains(@class, 'a3s') and contains(@class, 'aiL')]")
     email_body_text = email_body_parent.find_element(By.XPATH, ".//div[@dir='ltr']").text
@@ -277,7 +277,7 @@ def verify_subject_and_body(driver):
         print(f"Step 9 2/2 Fail! Email subject value {subject_text}")
 
 
-@renew_driver
+@retry
 def get_newest_inbox(driver):
     emails = driver.find_elements(By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr")
 
