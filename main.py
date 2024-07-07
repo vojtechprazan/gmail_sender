@@ -95,8 +95,9 @@ def login(driver):
         print("Step 1: Pass! Logged in successfully!")
 
     except Exception as e:
-        print("Step 1: Fail! Log in failed!")
+        print(f"Step 1: Fail! Log in failed, got exception {e}")
         driver.quit()
+
 
 @retry
 def compose_email(driver):
@@ -151,7 +152,7 @@ def send_email(driver):
 
 
 @retry
-def get_number_of_inbox(driver):
+def get_number_of_unread_inbox(driver):
     inbox = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH, "//div[@data-tooltip='Inbox']"))
     )
@@ -180,7 +181,7 @@ def verify_new_mail_came(driver, old_count, old_email):
     interval = 1  # seconds
 
     for _ in range(timeout):
-        new_count = get_number_of_inbox(driver)
+        new_count = get_number_of_unread_inbox(driver)
         print(f"new inbox: {new_count}")
         if new_count > old_count:
             new_email = Email(*get_newest_inbox(driver))
@@ -210,7 +211,6 @@ def mark_first_email_as_starred(driver):
 @retry
 def open_received_email(driver):
     emails = get_inboxes(driver)
-
     first_email = emails[0]
 
     # Locate the subject within the first email row
@@ -302,7 +302,7 @@ def main():
     login(firefox)
 
     # get number of inbox and newest email
-    old_inbox_count = get_number_of_inbox(firefox)
+    old_inbox_count = get_number_of_unread_inbox(firefox)
     if old_inbox_count == 0:
         old_email = Email(None, None, None)
     else:
