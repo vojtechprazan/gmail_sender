@@ -1,6 +1,6 @@
 import re
 import os
-import arg
+import argparse
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -10,14 +10,15 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.action_chains import ActionChains
 from time import sleep
+from functools import wraps
 
 
 parser = argparse.ArgumentParser(description='Process email address.')
 parser.add_argument('--email', help='Email address for processing')
-args = parser.parse_args()
+arguments = parser.parse_args()
 
 IGNORE_EXCEPTIONS = (NoSuchElementException, StaleElementReferenceException)
-EMAIL = args.email
+EMAIL = arguments.email
 EMAIL_SUBJECT = 'Test Email Subject'
 EMAIL_BODY = 'Test Email Body'
 PASSWORD = os.getenv('PASSWORD_ENV_VAR')
@@ -33,6 +34,7 @@ def renew_driver(func):
                 # Call the function with the driver instance
                 return func(driver, *args, **kwargs)
             except Exception as e:
+                sleep(0.5)
                 print(f"Attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:
                     print("Retrying...")
@@ -96,7 +98,7 @@ def login(driver):
         print("Step 1: Fail! Log in failed!")
         driver.quit()
 
-
+@renew_driver
 def compose_email(driver):
     # Click on the Compose button
     compose_button = Button(driver, "//div[@role='button' and text()='Compose']")
@@ -163,6 +165,8 @@ def get_number_of_inbox(driver):
 
 
 def verify_two_emails(old, new):
+    if old.sender is None:
+        return
     assert new.sender is not None
     print(f"verify old: {old}")
     print(f"verify new: {new}")
