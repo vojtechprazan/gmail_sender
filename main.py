@@ -43,8 +43,7 @@ def retry(func):
                     continue  # Retry the function
                 else:
                     sleep(0.5)
-                    logging.error(f"Retrying with{e} while calling {func.__name__}"
-                                  f"Max retries ({max_retries}) exceeded. Giving up.")
+                    logging.error(f"Max retries ({max_retries}) exceeded. Giving up.")
                     raise  # Re-raise the exception after max retries
 
     return wrapper
