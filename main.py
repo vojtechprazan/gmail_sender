@@ -1,6 +1,7 @@
 import re
 import os
 import argparse
+import logging
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -8,13 +9,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import ElementNotInteractableException
 from selenium.webdriver.common.action_chains import ActionChains
 from time import sleep
 from functools import wraps
 
-
 parser = argparse.ArgumentParser(description='Process email address.')
-parser.add_argument('--email', help='Email address for processing')
+parser.add_argument('--email', required=True, help='Email address for processing')
 arguments = parser.parse_args()
 
 IGNORE_EXCEPTIONS = (NoSuchElementException, StaleElementReferenceException)
@@ -22,6 +23,9 @@ EMAIL = arguments.email
 EMAIL_SUBJECT = 'Test Email Subject'
 EMAIL_BODY = 'Test Email Body'
 PASSWORD = os.getenv('PASSWORD_ENV_VAR')
+
+# Set logging level
+logging.basicConfig(level=logging.INFO)
 
 
 # Decorator to retry interaction with driver before calling the function
@@ -33,14 +37,14 @@ def retry(func):
             try:
                 # Call the function with the driver instance
                 return func(driver, *args, **kwargs)
-            except Exception as e:
-                sleep(0.5)
-                print(f"Attempt {attempt + 1} failed: {e}")
+            except IGNORE_EXCEPTIONS as e:
                 if attempt < max_retries - 1:
-                    print("Retrying...")
+                    logging.info(f"Retrying with {e} while calling {func.__name__}...")
                     continue  # Retry the function
                 else:
-                    print(f"Max retries ({max_retries}) exceeded. Giving up.")
+                    sleep(0.5)
+                    logging.error(f"Retrying with{e} while calling {func.__name__}"
+                                  f"Max retries ({max_retries}) exceeded. Giving up.")
                     raise  # Re-raise the exception after max retries
 
     return wrapper
@@ -50,12 +54,13 @@ class Button:
     def __init__(self, driver, xpath):
         self.driver = driver
         self.button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, xpath)))
+            EC.element_to_be_clickable((By.XPATH, xpath))
+        )
 
     def find_and_click_button(self):
         try:
             self.button.click()
-        except:
+        except IGNORE_EXCEPTIONS:
             self.driver.execute_script("arguments[0].click();", self.button)
 
 
@@ -69,9 +74,22 @@ class Email:
         return f"sender: {self.sender}, subject: {self.subject}, time: {self.time}"
 
 
+def retry_send_keys(driver, element, keys):
+    try:
+        # Attempt to send keys to the element
+        element.send_keys(keys)
+    except ElementNotInteractableException as e:
+        # Log a warning with the exception details
+        logging.warning(f"Encountered: {e}. Attempting to click the element using"
+                        f"JavaScript before sending keys.")
+        # Click the element using JavaScript to make it interactable
+        driver.execute_script("arguments[0].click();", element)
+        # Retry sending keys to the element
+        element.send_keys(keys)
+
+
 def login(driver):
     try:
-
         # Open Gmail login page
         driver.get('https://mail.google.com')
 
@@ -79,23 +97,24 @@ def login(driver):
         email_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "identifierId"))
         )
-        email_input.send_keys(EMAIL)
+
+        retry_send_keys(driver, email_input, EMAIL)
         email_input.send_keys(Keys.ENTER)
 
         # Wait for the password input field to be present
-        password_input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "Passwd")))
-
-        password_input.send_keys(PASSWORD)
+        password_input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "Passwd"))
+                                                         )
+        retry_send_keys(driver, password_input, PASSWORD)
         password_input.send_keys(Keys.ENTER)
 
         # Wait for the Gmail inbox page to load
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, "//div[contains(text(), 'Compose')]"))
         )
-        print("Step 1: Pass! Logged in successfully!")
+        logging.info("Step 1: Pass! Logged in successfully!")
 
-    except Exception as e:
-        print(f"Step 1: Fail! Log in failed, got exception {e}")
+    except IGNORE_EXCEPTIONS:
+        logging.info(f"Step 1: Fail! Log in failed, quitting program.")
         driver.quit()
 
 
@@ -111,10 +130,14 @@ def compose_email(driver):
 
     try:
         to_input.send_keys(EMAIL)
-    except:
-        # i think this is cheating
+    except ElementNotInteractableException:
+        # Find the 'To recipients' element using XPath with class identification
         element = driver.find_element(By.XPATH, "//div[contains(@class, 'fX') and contains(@class, 'aiL')]")
+
+        # Directly modify the style attribute of the 'element' object using JavaScript
         driver.execute_script("arguments[0].style = '';", element)
+
+        # Send the EMAIL to the 'To recipients' input field
         to_input.send_keys(EMAIL)
 
     # Enter the subject
@@ -124,7 +147,7 @@ def compose_email(driver):
     # Enter the email body
     body_input = driver.find_element(By.XPATH, "//div[@aria-label='Message Body']")
     body_input.send_keys(EMAIL_BODY)
-    print("Step 2: Pass!  Mail composed")
+    logging.info("Step 2: Pass!  Mail composed")
 
 
 @retry
@@ -140,7 +163,7 @@ def mark_email_as_label(driver):
     # click social
     social_label_option = driver.find_element(By.XPATH, "//div[contains(text(), 'Social')]")
     social_label_option.click()
-    print("Step 3: Pass!  Social label selected")
+    logging.info("Step 3: Pass!  Social label selected")
 
 
 @retry
@@ -148,7 +171,7 @@ def send_email(driver):
     # Click on the Send button
     send_button = Button(driver, "//div[@role='button' and text()='Send']")
     send_button.find_and_click_button()
-    print("Step 4: Pass! Mail sent")
+    logging.info("Step 4: Pass! Mail sent")
 
 
 @retry
@@ -169,8 +192,8 @@ def verify_two_emails(old, new):
     if old.sender is None:
         return
     assert new.sender is not None
-    print(f"verify old: {old}")
-    print(f"verify new: {new}")
+    logging.info(f"verify old: {old}")
+    logging.info(f"verify new: {new}")
     if old.sender != new.sender:
         raise ValueError("Mail from different sender arrived during test")
 
@@ -182,7 +205,7 @@ def verify_new_mail_came(driver, old_count, old_email):
 
     for _ in range(timeout):
         new_count = get_number_of_unread_inbox(driver)
-        print(f"new inbox: {new_count}")
+        logging.info(f"new inbox: {new_count}")
         if new_count > old_count:
             new_email = Email(*get_newest_inbox(driver))
             verify_two_emails(old_email, new_email)
@@ -205,7 +228,7 @@ def mark_first_email_as_starred(driver):
     first_email = emails[0]
     star_icon = first_email.find_element(By.CSS_SELECTOR, "span.aXw.T-KT[aria-label='Not starred']")
     star_icon.click()
-    print("Step 6: Pass! First email marked as starred.")
+    logging.info("Step 6: Pass! First email marked as starred.")
 
 
 @retry
@@ -225,7 +248,7 @@ def open_received_email(driver):
     else:
         # Use JavaScript to click the element if it is not directly clickable
         driver.execute_script("arguments[0].click();", subject_element)
-    print("Step 7: Pass! First email opened.")
+    logging.info("Step 7: Pass! First email opened.")
 
 
 @retry
@@ -252,9 +275,9 @@ def check_if_mail_is_social(driver):
 
     aria_checked = social_element.get_attribute("aria-checked")
     if aria_checked == "true":
-        print("Step 8 Pass! Social label verified")
+        logging.info("Step 8 Pass! Social label verified")
     else:
-        print(f"Step 8 Fail! Social label value {aria_checked}")
+        logging.info(f"Step 8 Fail! Social label value {aria_checked}")
 
 
 @retry
@@ -263,18 +286,19 @@ def verify_subject_and_body(driver):
     email_body_text = email_body_parent.find_element(By.XPATH, ".//div[@dir='ltr']").text
 
     if email_body_text == EMAIL_BODY:
-        print("Step 9  1/2 Pass! Email body verified")
+        logging.info("Step 9  1/2 Pass! Email body verified")
     else:
-        print(f"Step 9 1/2 Fail! Email body value {email_body_text}")
+        logging.info(f"Step 9 1/2 Fail! Email body value {email_body_text}")
 
     email_list = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, 'div.Cp div table.F.cf.zt tbody')))
+        EC.presence_of_element_located((By.CSS_SELECTOR, 'div.Cp div table.F.cf.zt tbody'))
+    )
     subject_text = email_list.find_element(By.XPATH, '//h2[contains(@class, "hP")]').text
 
     if subject_text == EMAIL_SUBJECT:
-        print("Step 9  2/2 Pass! Email subject verified")
+        logging.info("Step 9  2/2 Pass! Email subject verified")
     else:
-        print(f"Step 9 2/2 Fail! Email subject value {subject_text}")
+        logging.info(f"Step 9 2/2 Fail! Email subject value {subject_text}")
 
 
 @retry
