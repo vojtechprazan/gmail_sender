@@ -6,13 +6,10 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import StaleElementReferenceException
-from selenium.common.exceptions import ElementNotInteractableException
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, ElementNotInteractableException, TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from time import sleep
-
+from typing import List, Union
 
 parser = argparse.ArgumentParser(description='Process email address.')
 parser.add_argument('--email', required=True, help='Email address for processing')
@@ -29,13 +26,14 @@ logging.basicConfig(level=logging.INFO)
 
 
 class Button:
-    def __init__(self, driver, xpath):
+    def __init__(self, driver: webdriver.Firefox, xpath: str) -> None:
         self.driver = driver
         self.button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, xpath))
         )
 
-    def find_and_click_button(self):
+    def find_and_click_button(self) -> None:
+        """Attempts to click the button, falling back to JavaScript click if necessary."""
         try:
             self.button.click()
         except IGNORE_EXCEPTIONS:
@@ -43,65 +41,59 @@ class Button:
 
 
 class Email:
-    def __init__(self, sender, subject, time):
+    def __init__(self, sender: str, subject: str, time: str) -> None:
         self.sender = sender
         self.subject = subject
         self.time = time
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"sender: {self.sender}, subject: {self.subject}, time: {self.time}"
 
 
-def retry_send_keys(driver, element, keys):
+def retry_send_keys(driver: webdriver.Firefox,
+                    element: webdriver.remote.webelement.WebElement,
+                    keys: str) -> None:
+    """Retries sending keys to an element, clicking it first if it's not interactable."""
     try:
-        # Attempt to send keys to the element
         element.send_keys(keys)
     except ElementNotInteractableException as e:
-        # Log a warning with the exception details
-        logging.warning(f"Encountered: {e}. Attempting to click the element using"
-                        f"JavaScript before sending keys.")
-        # Click the element using JavaScript to make it interactable
+        logging.warning(f"Encountered: {e}. Attempting to click the element using JavaScript before sending keys.")
         driver.execute_script("arguments[0].click();", element)
-        # Retry sending keys to the element
         element.send_keys(keys)
 
 
-def login(driver):
+def login(driver: webdriver.Firefox) -> None:
+    """Logs into Gmail using the provided driver."""
     try:
-        # Open Gmail login page
         driver.get('https://mail.google.com')
 
-        # Wait for the email input field to be present
         email_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "identifierId"))
         )
-
         retry_send_keys(driver, email_input, EMAIL)
         email_input.send_keys(Keys.ENTER)
 
-        # Wait for the password input field to be present
-        password_input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "Passwd"))
-                                                         )
+        password_input = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.NAME, "Passwd"))
+        )
         retry_send_keys(driver, password_input, PASSWORD)
         password_input.send_keys(Keys.ENTER)
 
-        # Wait for the Gmail inbox page to load
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, "//div[contains(text(), 'Compose')]"))
         )
         logging.info("Step 1: Pass! Logged in successfully!")
 
     except IGNORE_EXCEPTIONS:
-        logging.info(f"Step 1: Fail! Log in failed, quitting program.")
+        logging.info("Step 1: Fail! Log in failed, quitting program.")
         driver.quit()
 
 
-def compose_email(driver):
-    # Click on the Compose button
+def compose_email(driver: webdriver.Firefox) -> None:
+    """Composes an email with predefined subject and body."""
     compose_button = Button(driver, "//div[@role='button' and text()='Compose']")
     compose_button.find_and_click_button()
 
-    # Wait for the recipient input field to be present
     to_input = WebDriverWait(driver, 10).until(
         EC.visibility_of_element_located((By.XPATH, "//input[@aria-label='To recipients']"))
     )
@@ -109,55 +101,48 @@ def compose_email(driver):
     try:
         to_input.send_keys(EMAIL)
     except ElementNotInteractableException:
-        # Find the 'To recipients' element using XPath with class identification
         element = driver.find_element(By.XPATH, "//div[contains(@class, 'fX') and contains(@class, 'aiL')]")
-
-        # Directly modify the style attribute of the 'element' object using JavaScript
         driver.execute_script("arguments[0].style = '';", element)
-
-        # Send the EMAIL to the 'To recipients' input field
         to_input.send_keys(EMAIL)
 
-    # Enter the subject
     subject_input = driver.find_element(By.NAME, "subjectbox")
     subject_input.send_keys(EMAIL_SUBJECT)
 
-    # Enter the email body
     body_input = driver.find_element(By.XPATH, "//div[@aria-label='Message Body']")
     body_input.send_keys(EMAIL_BODY)
-    logging.info("Step 2: Pass!  Mail composed")
+    logging.info("Step 2: Pass! Mail composed")
 
 
-def mark_email_as_label(driver):
-    # click more options
+def mark_email_as_label(driver: webdriver.Firefox) -> None:
+    """Marks the email as 'Social' label."""
     more_options = driver.find_element(By.XPATH, "//div[@data-tooltip='More options']")
     more_options.click()
 
-    # click label
     label_as_option = driver.find_element(By.XPATH, "//div[contains(text(), 'Label')]")
     label_as_option.click()
 
-    # click social
     social_label_option = driver.find_element(By.XPATH, "//div[contains(text(), 'Social')]")
     social_label_option.click()
-    logging.info("Step 3: Pass!  Social label selected")
+    logging.info("Step 3: Pass! Social label selected")
 
 
-def send_email(driver):
-    # Click on the Send button
+def send_email(driver: webdriver.Firefox) -> None:
+    """Sends the composed email."""
     send_button = Button(driver, "//div[@role='button' and text()='Send']")
     send_button.find_and_click_button()
     logging.info("Step 4: Pass! Mail sent")
 
 
-def verify_email_with_given_details(email, sender):
+def verify_email_with_given_details(email: Email, sender: str) -> None:
+    """Verifies that the email is from the expected sender."""
     if email.sender == sender:
         return
     else:
         raise ValueError("Email from different sender came during test!")
 
 
-def verify_new_mail_came(driver, old_count):
+def verify_new_mail_came(driver: webdriver.Firefox, old_count: int) -> None:
+    """Verifies that a new email has arrived. Assuming no mail was deleted during test."""
     timeout = 30  # seconds
     interval = 1  # seconds
     sender = "me"
@@ -171,17 +156,15 @@ def verify_new_mail_came(driver, old_count):
             return
         sleep(interval)
     else:
-        raise ValueError(f"Step 5: Fail! No new mail did arrive within specified timeout")
+        raise ValueError("Step 5: Fail! No new mail did arrive within specified timeout")
 
 
-def check_no_new_mail(driver):
+def check_no_new_mail(driver: webdriver.Firefox) -> bool:
+    """Checks if there are no new emails in the inbox."""
     try:
-        # Wait for the element to be present in the DOM
         WebDriverWait(driver, 1).until(
             EC.visibility_of_element_located((By.CSS_SELECTOR, "td.TC"))
         )
-
-        # Find the element and check its text content
         no_new_mail_element = driver.find_element(By.CSS_SELECTOR, "td.TC")
 
         if "No new mail!" in no_new_mail_element.text:
@@ -193,7 +176,8 @@ def check_no_new_mail(driver):
         return False
 
 
-def get_inboxes(driver):
+def get_inboxes(driver: webdriver.Firefox) -> List[webdriver.remote.webelement.WebElement]:
+    """Gets the list of email elements in the inbox."""
     if check_no_new_mail(driver):
         return []
     else:
@@ -203,17 +187,18 @@ def get_inboxes(driver):
         return emails
 
 
-def get_inboxes_count(driver):
+def get_inboxes_count(driver: webdriver.Firefox) -> int:
+    """Gets the count of emails in the inbox."""
     return len(get_inboxes(driver))
 
 
-def mark_first_email_as_starred(driver):
+def mark_first_email_as_starred(driver: webdriver.Firefox) -> None:
+    """Marks the first email in the inbox as starred."""
     emails = get_inboxes(driver)
     if not emails:
-        raise ValueError(f"Step 7: Inbox is empty, exiting test!")
+        raise ValueError("Step 7: Inbox is empty, exiting test!")
     first_email = emails[0]
 
-    # Explicit timing
     wait = WebDriverWait(driver, timeout=2)
     wait.until(lambda d: first_email.is_displayed())
 
@@ -222,40 +207,34 @@ def mark_first_email_as_starred(driver):
     logging.info("Step 6: Pass! First email marked as starred.")
 
 
-def open_received_email(driver):
+def open_received_email(driver: webdriver.Firefox) -> None:
+    """Opens the first received email in the inbox."""
     emails = get_inboxes(driver)
     first_email = emails[0]
 
-    # Explicit timing
     wait = WebDriverWait(driver, timeout=2)
     wait.until(lambda d: first_email.is_enabled())
 
-    # Locate the subject within the first email row
     subject_element = first_email.find_element(By.CSS_SELECTOR, "span.bqe")
 
-    # Ensure the subject element is visible
     if subject_element.is_displayed():
-        # Scroll the subject element into view and click on it
         actions = ActionChains(driver)
         actions.move_to_element(subject_element).perform()
         subject_element.click()
     else:
-        # Use JavaScript to click the element if it is not directly clickable
         driver.execute_script("arguments[0].click();", subject_element)
     logging.info("Step 7: Pass! First email opened.")
 
 
-def check_if_mail_is_social(driver):
-    # click more options
+def check_if_mail_is_social(driver: webdriver.Firefox) -> None:
+    """Checks if the opened email is labeled as 'Social'."""
     parent_div = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH, '//div[@class="iH bzn"]'))
     )
 
-    # Now find the "more options" button within the parent div
     more_options_button = parent_div.find_element(By.XPATH, './/div[@aria-label="More email options"]')
     more_options_button.click()
 
-    # click label
     label_as_element = WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, 'div.J-N.J-Ph'))
     )
@@ -272,12 +251,13 @@ def check_if_mail_is_social(driver):
         logging.info(f"Step 8 Fail! Social label value {aria_checked}")
 
 
-def verify_subject_and_body(driver):
+def verify_subject_and_body(driver: webdriver.Firefox) -> None:
+    """Verifies the subject and body of the opened email."""
     email_body_parent = driver.find_element(By.XPATH, "//*[contains(@class, 'a3s') and contains(@class, 'aiL')]")
     email_body_text = email_body_parent.find_element(By.XPATH, ".//div[@dir='ltr']").text
 
     if email_body_text == EMAIL_BODY:
-        logging.info("Step 9  1/2 Pass! Email body verified")
+        logging.info("Step 9 1/2 Pass! Email body verified")
     else:
         logging.info(f"Step 9 1/2 Fail! Email body value {email_body_text}")
 
@@ -287,13 +267,13 @@ def verify_subject_and_body(driver):
     subject_text = email_list.find_element(By.XPATH, '//h2[contains(@class, "hP")]').text
 
     if subject_text == EMAIL_SUBJECT:
-        logging.info("Step 9  2/2 Pass! Email subject verified")
+        logging.info("Step 9 2/2 Pass! Email subject verified")
     else:
         logging.info(f"Step 9 2/2 Fail! Email subject value {subject_text}")
 
 
-def get_newest_inbox(driver):
-    # Explicit timing
+def get_newest_inbox(driver: webdriver.Firefox) -> Union[Email, None]:
+    """Gets the newest email in the inbox."""
     WebDriverWait(driver, 10).until(
         EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr"))
     )
@@ -305,13 +285,17 @@ def get_newest_inbox(driver):
         subject = emails[0].find_element(By.XPATH, ".//td[5]/div/div/div").text
         time = emails[0].find_element(By.CSS_SELECTOR, "td.xW.xY span").get_attribute('title')
         return Email(sender, subject, time)
+    return None
 
 
-def quit_browser(driver):
+def quit_browser(driver: webdriver.Firefox) -> None:
+    """Quits the browser."""
     driver.quit()
 
 
-def main():
+def main() -> None:
+    """Main function to execute the email automation script."""
+
     # Set up the Firefox driver
     firefox = webdriver.Firefox()
 
