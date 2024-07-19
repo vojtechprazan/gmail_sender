@@ -1,4 +1,3 @@
-import re
 import os
 import argparse
 import logging
@@ -10,9 +9,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import ElementNotInteractableException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from time import sleep
-from functools import wraps
+
 
 parser = argparse.ArgumentParser(description='Process email address.')
 parser.add_argument('--email', required=True, help='Email address for processing')
@@ -26,27 +26,6 @@ PASSWORD = os.getenv('PASSWORD_ENV_VAR')
 
 # Set logging level
 logging.basicConfig(level=logging.INFO)
-
-
-# Decorator to retry interaction with driver before calling the function
-def retry(func):
-    @wraps(func)
-    def wrapper(driver, *args, **kwargs):
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # Call the function with the driver instance
-                return func(driver, *args, **kwargs)
-            except IGNORE_EXCEPTIONS as e:
-                if attempt < max_retries - 1:
-                    logging.info(f"Retrying with {e} while calling {func.__name__}...")
-                    continue  # Retry the function
-                else:
-                    sleep(0.5)
-                    logging.error(f"Max retries ({max_retries}) exceeded. Giving up.")
-                    raise  # Re-raise the exception after max retries
-
-    return wrapper
 
 
 class Button:
@@ -117,7 +96,6 @@ def login(driver):
         driver.quit()
 
 
-@retry
 def compose_email(driver):
     # Click on the Compose button
     compose_button = Button(driver, "//div[@role='button' and text()='Compose']")
@@ -125,7 +103,8 @@ def compose_email(driver):
 
     # Wait for the recipient input field to be present
     to_input = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//input[@aria-label='To recipients']")))
+        EC.visibility_of_element_located((By.XPATH, "//input[@aria-label='To recipients']"))
+    )
 
     try:
         to_input.send_keys(EMAIL)
@@ -149,7 +128,6 @@ def compose_email(driver):
     logging.info("Step 2: Pass!  Mail composed")
 
 
-@retry
 def mark_email_as_label(driver):
     # click more options
     more_options = driver.find_element(By.XPATH, "//div[@data-tooltip='More options']")
@@ -165,7 +143,6 @@ def mark_email_as_label(driver):
     logging.info("Step 3: Pass!  Social label selected")
 
 
-@retry
 def send_email(driver):
     # Click on the Send button
     send_button = Button(driver, "//div[@role='button' and text()='Send']")
@@ -173,67 +150,85 @@ def send_email(driver):
     logging.info("Step 4: Pass! Mail sent")
 
 
-@retry
-def get_number_of_unread_inbox(driver):
-    inbox = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//div[@data-tooltip='Inbox']"))
-    )
-    children = inbox.find_element(By.XPATH, ".//div")
-
-    inbox = re.findall(r'\d+', children.text)
-    if inbox:
-        return int(inbox[0])
-    else:
-        return 0
-
-
-def verify_two_emails(old, new):
-    if old.sender is None:
+def verify_email_with_given_details(email, sender):
+    if email.sender == sender:
         return
-    assert new.sender is not None
-    logging.info(f"verify old: {old}")
-    logging.info(f"verify new: {new}")
-    if old.sender != new.sender:
-        raise ValueError("Mail from different sender arrived during test")
+    else:
+        raise ValueError("Email from different sender came during test!")
 
 
-@retry
-def verify_new_mail_came(driver, old_count, old_email):
+def verify_new_mail_came(driver, old_count):
     timeout = 30  # seconds
     interval = 1  # seconds
+    sender = "me"
 
     for _ in range(timeout):
-        new_count = get_number_of_unread_inbox(driver)
-        logging.info(f"new inbox: {new_count}")
+        new_count = get_inboxes_count(driver)
         if new_count > old_count:
-            new_email = Email(*get_newest_inbox(driver))
-            verify_two_emails(old_email, new_email)
+            new_email = get_newest_inbox(driver)
+            verify_email_with_given_details(new_email, sender)
+            logging.info("Step 5: Pass! New email arrived from 'me' sender.")
             return
         sleep(interval)
     else:
-        raise ValueError(f"No mail did not arrive within specified timeout")
+        raise ValueError(f"Step 5: Fail! No new mail did arrive within specified timeout")
+
+
+def check_no_new_mail(driver):
+    try:
+        # Wait for the element to be present in the DOM
+        WebDriverWait(driver, 1).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, "td.TC"))
+        )
+
+        # Find the element and check its text content
+        no_new_mail_element = driver.find_element(By.CSS_SELECTOR, "td.TC")
+
+        if "No new mail!" in no_new_mail_element.text:
+            return True
+        else:
+            return False
+
+    except TimeoutException:
+        return False
 
 
 def get_inboxes(driver):
-    emails = WebDriverWait(driver, 10).until(
-        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr"))
-    )
-    return emails
+    if check_no_new_mail(driver):
+        return []
+    else:
+        emails = WebDriverWait(driver, 5).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr"))
+        )
+        return emails
 
 
-@retry
+def get_inboxes_count(driver):
+    return len(get_inboxes(driver))
+
+
 def mark_first_email_as_starred(driver):
     emails = get_inboxes(driver)
+    if not emails:
+        raise ValueError(f"Step 7: Inbox is empty, exiting test!")
     first_email = emails[0]
+
+    # Explicit timing
+    wait = WebDriverWait(driver, timeout=2)
+    wait.until(lambda d: first_email.is_displayed())
+
     star_icon = first_email.find_element(By.CSS_SELECTOR, "span.aXw.T-KT[aria-label='Not starred']")
     star_icon.click()
     logging.info("Step 6: Pass! First email marked as starred.")
 
 
-@retry
 def open_received_email(driver):
     emails = get_inboxes(driver)
     first_email = emails[0]
+
+    # Explicit timing
+    wait = WebDriverWait(driver, timeout=2)
+    wait.until(lambda d: first_email.is_enabled())
 
     # Locate the subject within the first email row
     subject_element = first_email.find_element(By.CSS_SELECTOR, "span.bqe")
@@ -250,7 +245,6 @@ def open_received_email(driver):
     logging.info("Step 7: Pass! First email opened.")
 
 
-@retry
 def check_if_mail_is_social(driver):
     # click more options
     parent_div = WebDriverWait(driver, 10).until(
@@ -259,7 +253,6 @@ def check_if_mail_is_social(driver):
 
     # Now find the "more options" button within the parent div
     more_options_button = parent_div.find_element(By.XPATH, './/div[@aria-label="More email options"]')
-
     more_options_button.click()
 
     # click label
@@ -279,7 +272,6 @@ def check_if_mail_is_social(driver):
         logging.info(f"Step 8 Fail! Social label value {aria_checked}")
 
 
-@retry
 def verify_subject_and_body(driver):
     email_body_parent = driver.find_element(By.XPATH, "//*[contains(@class, 'a3s') and contains(@class, 'aiL')]")
     email_body_text = email_body_parent.find_element(By.XPATH, ".//div[@dir='ltr']").text
@@ -300,17 +292,19 @@ def verify_subject_and_body(driver):
         logging.info(f"Step 9 2/2 Fail! Email subject value {subject_text}")
 
 
-@retry
 def get_newest_inbox(driver):
+    # Explicit timing
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr"))
+    )
+
     emails = driver.find_elements(By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr")
 
     if emails:
         sender = emails[0].find_element(By.XPATH, ".//td[4]").text
         subject = emails[0].find_element(By.XPATH, ".//td[5]/div/div/div").text
         time = emails[0].find_element(By.CSS_SELECTOR, "td.xW.xY span").get_attribute('title')
-        return sender, subject, time
-    else:
-        return None, None, None
+        return Email(sender, subject, time)
 
 
 def quit_browser(driver):
@@ -325,11 +319,7 @@ def main():
     login(firefox)
 
     # get number of inbox and newest email
-    old_inbox_count = get_number_of_unread_inbox(firefox)
-    if old_inbox_count == 0:
-        old_email = Email(None, None, None)
-    else:
-        old_email = Email(*get_newest_inbox(firefox))
+    old_inbox_count = get_inboxes_count(firefox)
 
     # step 2 compose email
     compose_email(firefox)
@@ -341,7 +331,7 @@ def main():
     send_email(firefox)
 
     # step 5 verify new mail has come
-    verify_new_mail_came(firefox, old_inbox_count, old_email)
+    verify_new_mail_came(firefox, old_inbox_count)
 
     # step 6 mark first email as starred
     mark_first_email_as_starred(firefox)
