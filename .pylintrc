@@ -1,3 +1,4 @@
 [MESSAGES CONTROL]
 disable=
     C0114,  # Missing module docstring
+    C0301,  # Disable line-too-long check
