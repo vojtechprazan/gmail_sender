@@ -25,6 +25,7 @@ Run the script with the following command:
 
 ```sh
 python main.py --email your_email@gmail.com
+```
 
 - ### **Limitations**
 Captcha and 2FA are not automated
