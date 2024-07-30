@@ -24,4 +24,7 @@ This script automates various tasks in Gmail using Selenium WebDriver. The scrip
 Run the script with the following command:
 
 ```sh
-python email_automation.py --email your_email@gmail.com
+python main.py --email your_email@gmail.com
+
+- ### **Limitations**
+Captcha and 2FA are not automated
