@@ -177,10 +177,10 @@ def verify_new_mail_came(driver: webdriver.Firefox, old_count: int) -> None:
             logging.info("Step 5: Pass! New email arrived from 'me' sender.")
             return
         sleep(interval)
-    else:
-        raise ValueError(
-            "Step 5: Fail! No new mail did arrive within specified timeout"
-        )
+
+    raise ValueError(
+        "Step 5: Fail! No new mail did arrive within specified timeout"
+    )
 
 
 def check_no_new_mail(driver: webdriver.Firefox) -> bool:
@@ -206,13 +206,13 @@ def get_inboxes(
     """Gets the list of email elements in the inbox."""
     if check_no_new_mail(driver):
         return []
-    else:
-        emails = WebDriverWait(driver, 5).until(
-            EC.presence_of_all_elements_located(
-                (By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr")
-            )
+
+    emails = WebDriverWait(driver, 5).until(
+        EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "div.Cp div table.F.cf.zt tbody tr")
         )
-        return emails
+    )
+    return emails
 
 
 def get_inboxes_count(driver: webdriver.Firefox) -> int:
