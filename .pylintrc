@@ -2,5 +2,5 @@
 disable=
     C0114,  # Missing module docstring
     C0301,  # Line-too-long check
-    R0903:  # Too few public methods
-    W1203:  # Use lazy % formatting in logging functions
+    R0903,  # Too few public methods
+    W1203  # Use lazy % formatting in logging functions
