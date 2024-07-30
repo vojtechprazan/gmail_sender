@@ -1,9 +1,9 @@
 import os
 import argparse
 import logging
-from selenium import webdriver
 from time import sleep
 from typing import List, Union
+from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 
 class Button:
     """Represents a clickable button located by XPath."""
-    
+
     def __init__(self, driver: webdriver.Firefox, xpath: str) -> None:
         self.driver = driver
         self.button = WebDriverWait(driver, 10).until(
@@ -50,7 +50,7 @@ class Button:
 
 class Email:
     """Stores information about an email including sender, subject, and time."""
-    
+
     def __init__(self, sender: str, subject: str, time: str) -> None:
         self.sender = sender
         self.subject = subject
@@ -159,8 +159,8 @@ def verify_email_with_given_details(email: Email, sender: str) -> None:
     """Verifies that the email is from the expected sender."""
     if email.sender == sender:
         return
-    else:
-        raise ValueError("Email from different sender came during test!")
+
+    raise ValueError("Email from different sender came during test!")
 
 
 def verify_new_mail_came(driver: webdriver.Firefox, old_count: int) -> None:
@@ -193,8 +193,8 @@ def check_no_new_mail(driver: webdriver.Firefox) -> bool:
 
         if "No new mail!" in no_new_mail_element.text:
             return True
-        else:
-            return False
+
+        return False
 
     except TimeoutException:
         return False
