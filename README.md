@@ -19,7 +19,7 @@ This script automates various tasks in Gmail using Selenium WebDriver. The scrip
 - Firefox Browser
 - Environment variable `PASSWORD_ENV_VAR` set to your Gmail password
 
-- ### **Usage**
+### **Usage**
 
 Run the script with the following command:
 
@@ -27,5 +27,5 @@ Run the script with the following command:
 python main.py --email your_email@gmail.com
 ```
 
-- ### **Limitations**
+### **Limitations**
 Captcha and 2FA are not automated
