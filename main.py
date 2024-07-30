@@ -2,6 +2,8 @@ import os
 import argparse
 import logging
 from selenium import webdriver
+from time import sleep
+from typing import List, Union
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -13,8 +15,7 @@ from selenium.common.exceptions import (
     TimeoutException,
 )
 from selenium.webdriver.common.action_chains import ActionChains
-from time import sleep
-from typing import List, Union
+
 
 parser = argparse.ArgumentParser(description="Process email address.")
 parser.add_argument("--email", required=True, help="Email address for processing")
@@ -31,6 +32,8 @@ logging.basicConfig(level=logging.INFO)
 
 
 class Button:
+    """Represents a clickable button located by XPath."""
+    
     def __init__(self, driver: webdriver.Firefox, xpath: str) -> None:
         self.driver = driver
         self.button = WebDriverWait(driver, 10).until(
@@ -46,6 +49,8 @@ class Button:
 
 
 class Email:
+    """Stores information about an email including sender, subject, and time."""
+    
     def __init__(self, sender: str, subject: str, time: str) -> None:
         self.sender = sender
         self.subject = subject
